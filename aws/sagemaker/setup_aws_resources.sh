@@ -41,8 +41,31 @@ aws iam put-role-policy \
 
 ROLE_ARN=$(aws iam get-role --role-name "$ROLE_NAME" --query 'Role.Arn' --output text)
 
+# --- 3. Lifecycle config + notebook instance for 00_ingest_raw_data.ipynb ---
+# Scoped to this one notebook instance only -- not attached to any other instance
+# in the project. Publishes CPU/Memory/Disk to CloudWatch (CWAgent namespace) so a
+# repeat of the OOM incident is visible instead of silent.
+LIFECYCLE_CONFIG_NAME="ingest-raw-data-metrics"
+NOTEBOOK_INSTANCE_NAME="ts-forecast-demo-ingest"
+NOTEBOOK_INSTANCE_TYPE="ml.m5.xlarge"
+
+aws sagemaker create-notebook-instance-lifecycle-config \
+  --notebook-instance-lifecycle-config-name "$LIFECYCLE_CONFIG_NAME" \
+  --on-start Content="$(base64 -w0 publish-instance-metrics-on-start.sh)"
+
+aws sagemaker create-notebook-instance \
+  --notebook-instance-name "$NOTEBOOK_INSTANCE_NAME" \
+  --instance-type "$NOTEBOOK_INSTANCE_TYPE" \
+  --role-arn "$ROLE_ARN" \
+  --lifecycle-config-name "$LIFECYCLE_CONFIG_NAME" \
+  --tags Key=Project,Value=ts-forecast-demo Key=Stage,Value=0-ingest
+
 echo ""
-echo "Bucket:    s3://${BUCKET}"
-echo "Role ARN:  ${ROLE_ARN}"
+echo "Bucket:              s3://${BUCKET}"
+echo "Role ARN:            ${ROLE_ARN}"
+echo "Notebook instance:   ${NOTEBOOK_INSTANCE_NAME} (${NOTEBOOK_INSTANCE_TYPE}, lifecycle config: ${LIFECYCLE_CONFIG_NAME})"
 echo ""
-echo "Use these as BUCKET and SAGEMAKER_ROLE in the project notebooks/scripts."
+echo "It takes a few minutes to reach InService. Check status with:"
+echo "  aws sagemaker describe-notebook-instance --notebook-instance-name ${NOTEBOOK_INSTANCE_NAME} --query NotebookInstanceStatus"
+echo ""
+echo "Use BUCKET=${BUCKET} and SAGEMAKER_ROLE=${ROLE_ARN} in 00_ingest_raw_data.ipynb."
