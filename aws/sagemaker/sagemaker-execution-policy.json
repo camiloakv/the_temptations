@@ -37,6 +37,13 @@
       "Resource": "arn:aws:logs:*:*:log-group:/aws/sagemaker/*"
     },
     {
+      "Sid": "PassExecutionRoleToJobs",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/ts-forecast-demo-sagemaker-role",
+      "Condition": { "StringEquals": { "iam:PassedToService": "sagemaker.amazonaws.com" } }
+    },
+    {
       "Sid": "PublishInstanceMetrics",
       "Effect": "Allow",
       "Action": "cloudwatch:PutMetricData",
@@ -51,8 +58,14 @@
         "sagemaker:CreateEndpointConfig",
         "sagemaker:CreateTrainingJob",
         "sagemaker:CreateProcessingJob",
+        "sagemaker:CreateHyperParameterTuningJob",
+        "sagemaker:CreateTransformJob",
         "sagemaker:DescribeTrainingJob",
-        "sagemaker:DescribeProcessingJob"
+        "sagemaker:DescribeProcessingJob",
+        "sagemaker:DescribeHyperParameterTuningJob",
+        "sagemaker:DescribeTransformJob",
+        "sagemaker:ListTrainingJobsForHyperParameterTuningJob",
+        "sagemaker:StopTrainingJob"
       ],
       "Resource": "*"
     }
