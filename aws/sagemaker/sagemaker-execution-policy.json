@@ -32,7 +32,8 @@
         "logs:CreateLogGroup",
         "logs:CreateLogStream",
         "logs:PutLogEvents",
-        "logs:DescribeLogStreams"
+        "logs:DescribeLogStreams",
+        "logs:GetLogEvents"
       ],
       "Resource": "arn:aws:logs:*:*:log-group:/aws/sagemaker/*"
     },
