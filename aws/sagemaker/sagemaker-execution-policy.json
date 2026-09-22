@@ -67,9 +67,21 @@
         "sagemaker:DescribeTransformJob",
         "sagemaker:ListTrainingJobsForHyperParameterTuningJob",
         "sagemaker:StopTrainingJob",
-        "sagemaker:ListTags"
+        "sagemaker:ListTags",
+        "sagemaker:DescribeEndpoint",
+        "sagemaker:DescribeEndpointConfig",
+        "sagemaker:DescribeModel",
+        "sagemaker:DeleteEndpoint",
+        "sagemaker:DeleteEndpointConfig",
+        "sagemaker:DeleteModel"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "InvokeOwnEndpoints",
+      "Effect": "Allow",
+      "Action": "sagemaker-runtime:InvokeEndpoint",
+      "Resource": "arn:aws:sagemaker:*:<ACCOUNT_ID>:endpoint/ts-forecast-demo-*"
     }
   ]
 }
