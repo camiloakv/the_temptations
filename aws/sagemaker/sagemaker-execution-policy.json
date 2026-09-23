@@ -68,6 +68,7 @@
         "sagemaker:ListTrainingJobsForHyperParameterTuningJob",
         "sagemaker:StopTrainingJob",
         "sagemaker:ListTags",
+        "sagemaker:AddTags",
         "sagemaker:DescribeEndpoint",
         "sagemaker:DescribeEndpointConfig",
         "sagemaker:DescribeModel",
