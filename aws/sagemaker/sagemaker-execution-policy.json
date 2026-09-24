@@ -81,7 +81,7 @@
     {
       "Sid": "InvokeOwnEndpoints",
       "Effect": "Allow",
-      "Action": "sagemaker-runtime:InvokeEndpoint",
+      "Action": "sagemaker:InvokeEndpoint",
       "Resource": "arn:aws:sagemaker:*:<ACCOUNT_ID>:endpoint/ts-forecast-demo-*"
     }
   ]
