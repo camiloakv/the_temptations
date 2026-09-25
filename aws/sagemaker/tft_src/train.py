@@ -38,6 +38,8 @@ def parse_args():
     p.add_argument("--batch-size", type=int, default=64)
     p.add_argument("--context-length", type=int, default=168)
     p.add_argument("--prediction-length", type=int, default=168)
+    p.add_argument("--max-history-hours", type=int, default=24 * 180)  # 180 days: caps TimeSeriesDataSet's
+                                                                         # window enumeration, the actual OOM driver
     p.add_argument("--s3-bucket", type=str, required=True)
     p.add_argument("--s3-results-prefix", type=str, required=True)
 
@@ -53,25 +55,35 @@ def load_jsonlines(path):
         return [json.loads(line) for line in f]
 
 
-def to_long_df(records):
-    """DeepAR JSON records -> long-format DataFrame: series, time_idx, value, hour, dow."""
+def to_long_df(records, max_history_hours=None):
+    """DeepAR JSON records -> long-format DataFrame: series, time_idx, value, hour, dow.
+
+    max_history_hours, if set, keeps only the most recent N hours per series -- this is the main
+    lever against TimeSeriesDataSet's memory use, since it enumerates every valid encoder/decoder
+    window across the full history otherwise (333 series x ~30k hours = ~10M windows).
+    """
     frames = []
     for series_idx, rec in enumerate(records):
         target = np.array([np.nan if v == "NaN" else v for v in rec["target"]], dtype=np.float32)
-        idx = pd.date_range(pd.Timestamp(rec["start"]), periods=len(target), freq="h")
+        start = pd.Timestamp(rec["start"])
+        if max_history_hours is not None and len(target) > max_history_hours:
+            offset_hours = len(target) - max_history_hours
+            target = target[-max_history_hours:]
+            start = start + pd.Timedelta(hours=offset_hours)
+        idx = pd.date_range(start, periods=len(target), freq="h")
         frames.append(
             pd.DataFrame(
                 {
                     "series": str(series_idx),
-                    "time_idx": np.arange(len(target)),
+                    "time_idx": np.arange(len(target), dtype=np.int32),
                     "value": target,
-                    "hour": idx.hour.astype(str),
-                    "dow": idx.dayofweek.astype(str),
+                    "hour": pd.Categorical(idx.hour.astype(str)),
+                    "dow": pd.Categorical(idx.dayofweek.astype(str)),
                 }
             )
         )
     df = pd.concat(frames, ignore_index=True)
-    df["value"] = df["value"].ffill().bfill()  # TFT doesn't accept NaN targets
+    df["value"] = df.groupby("series")["value"].transform(lambda s: s.ffill().bfill())
     return df
 
 
@@ -96,26 +108,43 @@ def build_datasets(train_df, context_length, prediction_length):
 
 
 def evaluate_held_out_week(model, records, context_length, prediction_length, device):
-    """Same evaluation contract as the LSTM script: last context_length -> forecast -> vs. true tail."""
-    df = to_long_df(records)
+    """Same evaluation contract as the LSTM script: last context_length -> forecast -> vs. true tail.
+
+    Builds only the small per-series tail slice needed, not a full-history long DataFrame for all
+    333 series -- that would hit the same memory problem truncation fixes in to_long_df/training.
+    """
+    window = context_length + prediction_length
     errors = []
     model.eval()
-    for series_id, group in df.groupby("series"):
-        if len(group) < context_length + prediction_length:
+    for series_idx, rec in enumerate(records):
+        target = np.array([np.nan if v == "NaN" else v for v in rec["target"]], dtype=np.float32)
+        if len(target) < window:
             continue
-        encoder_data = group.iloc[-(context_length + prediction_length) : -prediction_length]
-        decoder_actuals = group.iloc[-prediction_length:]["value"].values
+        tail = target[-window:]
+        start = pd.Timestamp(rec["start"]) + pd.Timedelta(hours=len(target) - window)
+        idx = pd.date_range(start, periods=window, freq="h")
+
+        series_df = pd.DataFrame(
+            {
+                "series": str(series_idx),
+                "time_idx": np.arange(window, dtype=np.int32),
+                "value": pd.Series(tail).ffill().bfill().values,
+                "hour": pd.Categorical(idx.hour.astype(str)),
+                "dow": pd.Categorical(idx.dayofweek.astype(str)),
+            }
+        )
+        decoder_actuals = tail[-prediction_length:]
+
         try:
             with torch.no_grad():
-                raw_pred = model.predict(
-                    df[df.series == series_id].iloc[-(context_length + prediction_length) :],
-                    mode="prediction",
-                )
+                raw_pred = model.predict(series_df, mode="prediction")
             pred = raw_pred.numpy().flatten()[:prediction_length]
-            rmse = math.sqrt(np.mean((decoder_actuals - pred) ** 2))
-            errors.append({"client_id": f"client_{series_id}", "rmse": rmse})
+            mask = ~np.isnan(decoder_actuals)
+            if mask.sum() > 0:
+                rmse = math.sqrt(np.mean((decoder_actuals[mask] - pred[mask]) ** 2))
+                errors.append({"client_id": f"client_{series_idx}", "rmse": rmse})
         except Exception as e:  # keep evaluation resilient to a handful of edge-case series
-            print(f"eval skipped for series {series_id}: {e}")
+            print(f"eval skipped for series {series_idx}: {e}")
     return errors
 
 
@@ -126,7 +155,7 @@ def main():
     train_records = load_jsonlines(os.path.join(args.train, "train.json"))
     test_records = load_jsonlines(os.path.join(args.test, "test.json"))
 
-    train_df = to_long_df(train_records)
+    train_df = to_long_df(train_records, max_history_hours=args.max_history_hours)
     training, validation = build_datasets(train_df, args.context_length, args.prediction_length)
 
     train_loader = training.to_dataloader(train=True, batch_size=args.batch_size, num_workers=0)
