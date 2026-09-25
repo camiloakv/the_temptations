@@ -98,4 +98,58 @@ echo "  aws sagemaker describe-notebook-instance --notebook-instance-name ${NOTE
 echo ""
 echo "Use BUCKET=${BUCKET} and SAGEMAKER_ROLE=${ROLE_ARN} in 00_ingest_raw_data.ipynb."
 
+# --- 4. Notebook instances for upcoming stages (LSTM, TFT) -------------------
+# Created now so infra is ready when we get to them, but NOT left running today --
+# only ts-forecast-demo-ingest is actually in use this session. Each new instance
+# is started (required by the API), then stopped immediately once InService, so it
+# doesn't idle-bill between now and whenever we actually work on it. Reuses the
+# same lifecycle config (it's generic -- publishes system metrics regardless of
+# which notebook runs on the instance).
+#
+# Instance type is ml.m5.xlarge for both: the notebook itself only orchestrates
+# remote training jobs (same pattern as the DeepAR notebook) -- the actual GPU
+# work for TFT happens in its own ephemeral training-job instance, not here.
+
+wait_for_notebook_status() {
+  local name="$1"
+  local target="$2"
+  echo "Waiting for ${name} to reach ${target}..."
+  while true; do
+    status=$(aws sagemaker describe-notebook-instance \
+      --notebook-instance-name "$name" --query NotebookInstanceStatus --output text)
+    echo "  ${name}: ${status}"
+    [ "$status" = "$target" ] && break
+    sleep 15
+  done
+}
+
+create_stopped_notebook_instance() {
+  local name="$1"
+  local stage_tag="$2"
+
+  if aws sagemaker describe-notebook-instance --notebook-instance-name "$name" >/dev/null 2>&1; then
+    echo "Notebook instance ${name} already exists, leaving its current state untouched."
+    return
+  fi
+
+  aws sagemaker create-notebook-instance \
+    --notebook-instance-name "$name" \
+    --instance-type "$NOTEBOOK_INSTANCE_TYPE" \
+    --role-arn "$ROLE_ARN" \
+    --lifecycle-config-name "$LIFECYCLE_CONFIG_NAME" \
+    --tags Key=Project,Value=ts-forecast-demo "Key=Stage,Value=${stage_tag}"
+
+  wait_for_notebook_status "$name" "InService"
+  echo "Stopping ${name} (not needed today, avoids idle billing)."
+  aws sagemaker stop-notebook-instance --notebook-instance-name "$name"
+}
+
+create_stopped_notebook_instance "ts-forecast-demo-lstm" "2b-lstm"
+create_stopped_notebook_instance "ts-forecast-demo-tft" "2c-tft"
+
+echo ""
+echo "LSTM instance:  ts-forecast-demo-lstm  (${NOTEBOOK_INSTANCE_TYPE}, created stopped)"
+echo "TFT instance:   ts-forecast-demo-tft   (${NOTEBOOK_INSTANCE_TYPE}, created stopped)"
+echo "Start either one from the console (or 'aws sagemaker start-notebook-instance') when its stage begins."
+
 rm -f "$RESOLVED_POLICY"
