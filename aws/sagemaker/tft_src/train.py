@@ -40,6 +40,9 @@ def parse_args():
     p.add_argument("--prediction-length", type=int, default=168)
     p.add_argument("--max-history-hours", type=int, default=24 * 180)  # 180 days: caps TimeSeriesDataSet's
                                                                          # window enumeration, the actual OOM driver
+    p.add_argument("--max-series", type=int, default=None)  # subsample series count, for a fast smoke test
+    p.add_argument("--limit-train-batches", type=float, default=1.0)  # int or fraction, passed to Trainer
+    p.add_argument("--limit-val-batches", type=float, default=1.0)
     p.add_argument("--s3-bucket", type=str, required=True)
     p.add_argument("--s3-results-prefix", type=str, required=True)
 
@@ -155,6 +158,10 @@ def main():
     train_records = load_jsonlines(os.path.join(args.train, "train.json"))
     test_records = load_jsonlines(os.path.join(args.test, "test.json"))
 
+    if args.max_series is not None:
+        train_records = train_records[: args.max_series]
+        test_records = test_records[: args.max_series]  # same order as train, indices still correspond
+
     train_df = to_long_df(train_records, max_history_hours=args.max_history_hours)
     training, validation = build_datasets(train_df, args.context_length, args.prediction_length)
 
@@ -178,6 +185,8 @@ def main():
         enable_progress_bar=False,
         logger=False,
         enable_checkpointing=False,
+        limit_train_batches=args.limit_train_batches,
+        limit_val_batches=args.limit_val_batches,
     )
 
     train_start = time.time()
