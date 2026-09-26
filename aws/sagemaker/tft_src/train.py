@@ -38,11 +38,10 @@ def parse_args():
     p.add_argument("--batch-size", type=int, default=64)
     p.add_argument("--context-length", type=int, default=168)
     p.add_argument("--prediction-length", type=int, default=168)
-    p.add_argument("--max-history-hours", type=int, default=24 * 180)  # 180 days: caps TimeSeriesDataSet's
-                                                                         # window enumeration, the actual OOM driver
-    p.add_argument("--max-series", type=int, default=None)  # subsample series count, for a fast smoke test
-    p.add_argument("--limit-train-batches", type=float, default=1.0)  # int or fraction, passed to Trainer
-    p.add_argument("--limit-val-batches", type=float, default=1.0)
+    p.add_argument("--max-history-hours", type=int, default=24 * 14)  # 14 days by default now
+    p.add_argument("--max-series", type=int, default=30)  # subsampled by default, not just for the sanity job
+    p.add_argument("--limit-train-batches", type=float, default=10)
+    p.add_argument("--limit-val-batches", type=float, default=2)
     p.add_argument("--s3-bucket", type=str, required=True)
     p.add_argument("--s3-results-prefix", type=str, required=True)
 
