@@ -38,7 +38,9 @@ def parse_args():
     p.add_argument("--batch-size", type=int, default=64)
     p.add_argument("--context-length", type=int, default=168)
     p.add_argument("--prediction-length", type=int, default=168)
-    p.add_argument("--max-history-hours", type=int, default=24 * 14)  # 14 days by default now
+    p.add_argument("--max-history-hours", type=int, default=24 * 30)  # must exceed context_length +
+                                                                        # 2*prediction_length (504 here) or
+                                                                        # zero training windows survive
     p.add_argument("--max-series", type=int, default=30)  # subsampled by default, not just for the sanity job
     p.add_argument("--limit-train-batches", type=float, default=10)
     p.add_argument("--limit-val-batches", type=float, default=2)
@@ -160,6 +162,13 @@ def main():
     if args.max_series is not None:
         train_records = train_records[: args.max_series]
         test_records = test_records[: args.max_series]  # same order as train, indices still correspond
+
+    min_required_hours = args.context_length + 2 * args.prediction_length  # encoder + decoder + 1 training window
+    assert args.max_history_hours >= min_required_hours, (
+        f"--max-history-hours={args.max_history_hours} leaves no valid training windows: needs to be >= "
+        f"context_length + 2*prediction_length = {min_required_hours} (context+prediction covers one window, "
+        f"the training split additionally holds out the last prediction_length for validation)."
+    )
 
     train_df = to_long_df(train_records, max_history_hours=args.max_history_hours)
     training, validation = build_datasets(train_df, args.context_length, args.prediction_length)
