@@ -88,8 +88,8 @@ class WindowDataset(Dataset):
         else:
             s = np.random.randint(0, len(target) - self.min_len)
 
-        ctx = target[s : s + self.context_length]
-        fut = target[s + self.context_length : s + self.context_length + self.prediction_length]
+        ctx = target[s : s + self.context_length] / rec["scale"]
+        fut = target[s + self.context_length : s + self.context_length + self.prediction_length] / rec["scale"]
         tfeat = time_features(rec["start"], s, self.context_length)
         x = np.concatenate([ctx[:, None], tfeat], axis=1)  # (context_length, 5)
         cat = rec["cat"][0]
@@ -116,12 +116,19 @@ class LSTMForecaster(nn.Module):
         return self.head(h_n[-1])
 
 
-def evaluate_held_out_week(model, test_records, context_length, prediction_length, device):
-    """Real evaluation: last context_length hours -> forecast -> compare vs. true last prediction_length hours."""
+def evaluate_held_out_week(model, test_records, scales, context_length, prediction_length, device):
+    """Real evaluation: last context_length hours -> forecast -> compare vs. true last prediction_length hours.
+
+    `scales` are the per-client scales computed from the *train* portion (see main()), indexed by
+    position -- test_records and train_records share the same client ordering by construction. Using
+    train-derived scales here (not recomputed from the held-out week) avoids leaking test data into
+    normalization.
+    """
     model.eval()
     errors = []
     with torch.no_grad():
         for cat_idx, rec in enumerate(test_records):
+            scale = scales[cat_idx]
             target = np.array([np.nan if v == "NaN" else v for v in rec["target"]], dtype=np.float32)
             if len(target) < context_length + prediction_length:
                 continue
@@ -131,11 +138,11 @@ def evaluate_held_out_week(model, test_records, context_length, prediction_lengt
                 continue
 
             tfeat = time_features(rec["start"], len(target) - context_length - prediction_length, context_length)
-            x = np.concatenate([np.nan_to_num(ctx)[:, None], tfeat], axis=1)
+            x = np.concatenate([(np.nan_to_num(ctx) / scale)[:, None], tfeat], axis=1)
             x_t = torch.tensor(x, dtype=torch.float32, device=device).unsqueeze(0)
             cat_t = torch.tensor([cat_idx], dtype=torch.long, device=device)
 
-            pred = model(x_t, cat_t).cpu().numpy().flatten()
+            pred = model(x_t, cat_t).cpu().numpy().flatten() * scale  # back to real kWh units
             mask = ~np.isnan(actual)
             if mask.sum() > 0:
                 rmse = math.sqrt(np.mean((actual[mask] - pred[mask]) ** 2))
@@ -150,6 +157,14 @@ def main():
     train_path = os.path.join(args.train, "train.json")
     test_path = os.path.join(args.test, "test.json")
     train_records = load_jsonlines(train_path)
+
+    scales = []
+    for rec in train_records:
+        vals = np.array([np.nan if v == "NaN" else v for v in rec["target"]], dtype=np.float32)
+        vals = vals[~np.isnan(vals)]
+        scale = float(np.mean(np.abs(vals))) if len(vals) > 0 else 0.0
+        scales.append(scale if scale > 1e-6 else 1.0)  # guard against degenerate all-zero series
+        rec["scale"] = scales[-1]
     test_records = load_jsonlines(test_path)
 
     dataset = WindowDataset(train_records, args.context_length, args.prediction_length, args.steps_per_epoch)
@@ -182,7 +197,7 @@ def main():
         print(f"epoch {epoch}: train_loss={epoch_loss / len(loader):.4f}")
     train_seconds = time.time() - train_start
 
-    errors = evaluate_held_out_week(model, test_records, args.context_length, args.prediction_length, device)
+    errors = evaluate_held_out_week(model, test_records, scales, args.context_length, args.prediction_length, device)
     rmse_values = [e["rmse"] for e in errors]
     mean_rmse = float(np.mean(rmse_values)) if rmse_values else float("nan")
     median_rmse = float(np.median(rmse_values)) if rmse_values else float("nan")
@@ -213,6 +228,7 @@ def main():
         "median_rmse": median_rmse,
         "n_clients_evaluated": len(errors),
         "per_client_errors": errors,
+        "scaling": "per-client mean(|target|), computed from train portion only",
     }
 
     s3 = boto3.client("s3")
