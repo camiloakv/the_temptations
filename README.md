@@ -53,5 +53,20 @@ This is a permanently ongoing project exploring the tooling of main cloud provid
 </table>
 
 
-## Setup
+## Setup (sketch)
 
+
+
+### AWS
+
+1. **Download the AWS CLI**. On Windows, the easiest way to use the AWS CLI is through the Git Bash terminal.
+    1. Run `irm 'https://awscli.amazonaws.com/AWSCLIV2.msi' -OutFile 'AWSCLIV2.msi'; Start-Process msiexec.exe -Wait -ArgumentList '/i AWSCLIV2.msi /qn'`.
+    2. If that doesn't automatically install the CLI, manually execute the installer `AWSCLIV2.msi` downloaded.
+    3. Verify the installs running `aws --version`
+    4. Get an access key: AWS IAM console → Users → your user → Security credentials tab → Create access key → choose 'Command Line Interface (CLI)' as the use case.
+    5. Configure credentials running `aws configure`. Paste the keys, default region (e.g. us-east-1), and default output format (e.g. json).
+    6. Confirm it works running `aws sts get-caller-identity`.
+2. **Set up resources**. Run `chmod +x setup_aws_resources.sh` and `./setup_aws_resources.sh`.
+
+
+#### Sagemaker
