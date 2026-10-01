@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install ruff
+      - run: ruff check lstm_src/ tft_src/ tests/
+
+  smoke-test-lstm:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      # CPU-only wheel: much faster to install in CI than the default (CUDA-bundled) build
+      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install pandas numpy boto3 pytest
+      - run: pytest tests/test_lstm_smoke.py -v
+
+  # NOTE: no TFT smoke test yet. pytorch-forecasting + lightning add real install time to every
+  # PR; deliberately deferred rather than slowing down every CI run for the stretch model. Revisit
+  # if TFT's train.py sees frequent changes.
