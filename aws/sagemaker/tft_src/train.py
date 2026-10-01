@@ -236,7 +236,7 @@ def main():
     else:
         s3 = boto3.client("s3")
         s3.put_object(Bucket=args.s3_bucket, Key=key, Body=json.dumps(result).encode())
-        print(f"Results uploaded to s3://{args.s3_bucket}/{key}")
+        print(f"Results uploaded to s3://{args.s3_bucket}/{key}")  #blablabla
 
 
 if __name__ == "__main__":
