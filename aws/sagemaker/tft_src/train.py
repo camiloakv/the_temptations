@@ -24,7 +24,6 @@ from lightning.pytorch import Trainer
 from pytorch_forecasting import TemporalFusionTransformer, TimeSeriesDataSet
 from pytorch_forecasting.data import GroupNormalizer
 from pytorch_forecasting.metrics import QuantileLoss
-from torch.utils.data import DataLoader
 
 
 def parse_args():
@@ -148,7 +147,7 @@ def evaluate_held_out_week(model, records, context_length, prediction_length, de
             if mask.sum() > 0:
                 rmse = math.sqrt(np.mean((decoder_actuals[mask] - pred[mask]) ** 2))
                 errors.append({"client_id": f"client_{series_idx}", "rmse": rmse})
-        except Exception as e:  # noqa: BLE001 - keep evaluation resilient to a handful of edge-case series
+        except Exception as e:  # keep evaluation resilient to a handful of edge-case series
             print(f"eval skipped for series {series_idx}: {e}")
     return errors
 
