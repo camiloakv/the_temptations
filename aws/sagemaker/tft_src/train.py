@@ -148,7 +148,7 @@ def evaluate_held_out_week(model, records, context_length, prediction_length, de
             if mask.sum() > 0:
                 rmse = math.sqrt(np.mean((decoder_actuals[mask] - pred[mask]) ** 2))
                 errors.append({"client_id": f"client_{series_idx}", "rmse": rmse})
-        except Exception as e:  # keep evaluation resilient to a handful of edge-case series
+        except Exception as e:  # noqa: BLE001 - keep evaluation resilient to a handful of edge-case series
             print(f"eval skipped for series {series_idx}: {e}")
     return errors
 
@@ -236,7 +236,7 @@ def main():
     else:
         s3 = boto3.client("s3")
         s3.put_object(Bucket=args.s3_bucket, Key=key, Body=json.dumps(result).encode())
-        print(f"Results uploaded to s3://{args.s3_bucket}/{key}")  #blablabla
+        print(f"Results uploaded to s3://{args.s3_bucket}/{key}")
 
 
 if __name__ == "__main__":
