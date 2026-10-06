@@ -73,7 +73,7 @@ def test_lstm_train_script_runs_end_to_end():
             "--skip-s3-upload",
         ]
 
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=False)
 
         assert result.returncode == 0, (
             f"train.py exited {result.returncode}\n--- stdout ---\n{result.stdout}\n"
