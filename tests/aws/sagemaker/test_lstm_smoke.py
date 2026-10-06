@@ -15,7 +15,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-TRAIN_PY = Path(__file__).resolve().parents[1] / "lstm_src" / "train.py"
+TRAIN_PY = Path(__file__).resolve().parents[3] / "aws" / "sagemaker" / "lstm_src" / "train.py"
 
 N_SERIES = 5
 SERIES_LENGTH = 400  # hours; comfortably above context+prediction (336) used below
