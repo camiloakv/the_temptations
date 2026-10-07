@@ -16,8 +16,8 @@ import boto3
 import numpy as np
 import pandas as pd
 import torch
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from torch import nn
+from torch.utils.data import DataLoader, Dataset
 
 
 def parse_args():
@@ -34,6 +34,7 @@ def parse_args():
     p.add_argument("--prediction-length", type=int, default=168)
     p.add_argument("--s3-bucket", type=str, required=True)
     p.add_argument("--s3-results-prefix", type=str, required=True)
+    p.add_argument("--skip-s3-upload", action="store_true")  # for CI smoke tests, no AWS credentials there
 
     p.add_argument("--train", type=str, default=os.environ.get("SM_CHANNEL_TRAIN"))
     p.add_argument("--test", type=str, default=os.environ.get("SM_CHANNEL_TEST"))
@@ -231,10 +232,16 @@ def main():
         "scaling": "per-client mean(|target|), computed from train portion only",
     }
 
-    s3 = boto3.client("s3")
     key = f"{args.s3_results_prefix}/{job_name}.json"
-    s3.put_object(Bucket=args.s3_bucket, Key=key, Body=json.dumps(result).encode())
-    print(f"Results uploaded to s3://{args.s3_bucket}/{key}")
+    if args.skip_s3_upload:
+        local_path = os.path.join(args.model_dir, "result.json")
+        with open(local_path, "w") as f:
+            json.dump(result, f)
+        print(f"--skip-s3-upload set: results written locally to {local_path}")
+    else:
+        s3 = boto3.client("s3")
+        s3.put_object(Bucket=args.s3_bucket, Key=key, Body=json.dumps(result).encode())
+        print(f"Results uploaded to s3://{args.s3_bucket}/{key}")
 
 
 if __name__ == "__main__":
