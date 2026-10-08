@@ -3,6 +3,11 @@ set -euo pipefail
 
 # --- Config ---------------------------------------------------------------
 REGION="us-east-1"
+# Exact repo identity GitHub puts in OIDC tokens, WITHOUT the leading "repo:". Which form applies
+# depends on when the repo was created -- see the lookup steps given alongside this script:
+#   classic:   OWNER/REPO                       (repos created before 2026-07-15, unless opted in)
+#   immutable: OWNER@OWNER_ID/REPO@REPO_ID      (repos created/renamed/transferred after that)
+GITHUB_REPO_SUBJECT="<owner/repo or owner@id/repo@id>"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 BUCKET="ts-forecast-demo-${ACCOUNT_ID}"
 ROLE_NAME="ts-forecast-demo-sagemaker-role"
@@ -152,4 +157,57 @@ echo "LSTM instance:  ts-forecast-demo-lstm  (${NOTEBOOK_INSTANCE_TYPE}, created
 echo "TFT instance:   ts-forecast-demo-tft   (${NOTEBOOK_INSTANCE_TYPE}, created stopped)"
 echo "Start either one from the console (or 'aws sagemaker start-notebook-instance') when its stage begins."
 
-rm -f "$RESOLVED_POLICY"
+# --- 5. GitHub Actions OIDC provider + CD role -------------------------------
+# The OIDC provider is an account-wide resource -- only needs creating once total,
+# regardless of how many repos/projects use it. The role is project-specific.
+OIDC_PROVIDER_URL="token.actions.githubusercontent.com"
+OIDC_PROVIDER_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/${OIDC_PROVIDER_URL}"
+CD_ROLE_NAME="ts-forecast-demo-github-actions-role"
+CD_POLICY_NAME="ts-forecast-demo-github-actions-policy"
+
+if aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$OIDC_PROVIDER_ARN" >/dev/null 2>&1; then
+  echo "GitHub OIDC provider already registered on this account, skipping creation."
+else
+  # Thumbprint is GitHub's well-known OIDC root CA thumbprint; AWS also validates the audience,
+  # so this is a standard, documented value, not something project-specific.
+  aws iam create-open-id-connect-provider \
+    --url "https://${OIDC_PROVIDER_URL}" \
+    --client-id-list "sts.amazonaws.com" \
+    --thumbprint-list "6938fd4d98bab03faadb97b34396831e3780aea1"
+fi
+
+sed -e "s|<ACCOUNT_ID>|${ACCOUNT_ID}|g" \
+    -e "s|<GITHUB_REPO_SUBJECT>|${GITHUB_REPO_SUBJECT}|g" \
+    github-actions-trust-policy.json > ./github-actions-trust-policy.resolved.json
+
+sed "s/<ACCOUNT_ID>/${ACCOUNT_ID}/g" \
+  github-actions-cd-policy.json > ./github-actions-cd-policy.resolved.json
+
+if aws iam get-role --role-name "$CD_ROLE_NAME" >/dev/null 2>&1; then
+  echo "Role ${CD_ROLE_NAME} already exists, skipping creation."
+else
+  aws iam create-role \
+    --role-name "$CD_ROLE_NAME" \
+    --assume-role-policy-document file://github-actions-trust-policy.resolved.json \
+    --description "Assumed by GitHub Actions via OIDC to launch SageMaker training jobs"
+fi
+
+# create-role only applies the trust policy at creation time. Syncing it explicitly means a
+# corrected trust policy actually reaches a role that already exists (same idea as put-role-policy).
+aws iam update-assume-role-policy \
+  --role-name "$CD_ROLE_NAME" \
+  --policy-document file://github-actions-trust-policy.resolved.json
+
+aws iam put-role-policy \
+  --role-name "$CD_ROLE_NAME" \
+  --policy-name "$CD_POLICY_NAME" \
+  --policy-document file://github-actions-cd-policy.resolved.json
+
+CD_ROLE_ARN=$(aws iam get-role --role-name "$CD_ROLE_NAME" --query 'Role.Arn' --output text)
+
+echo ""
+echo "GitHub Actions role: ${CD_ROLE_ARN}"
+echo "Add AWS_ACCOUNT_ID=${ACCOUNT_ID} as a GitHub repo secret (Settings -> Secrets and variables -> Actions)."
+echo "Trust policy restricts assumption to: repo:${GITHUB_REPO_SUBJECT}, branch main and tags v*"
+
+rm -f "$RESOLVED_POLICY" ./github-actions-trust-policy.resolved.json ./github-actions-cd-policy.resolved.json

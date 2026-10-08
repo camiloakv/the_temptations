@@ -1,0 +1,43 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LaunchAndMonitorTrainingJobs",
+      "Effect": "Allow",
+      "Action": [
+        "sagemaker:CreateTrainingJob",
+        "sagemaker:DescribeTrainingJob",
+        "sagemaker:StopTrainingJob",
+        "sagemaker:AddTags",
+        "sagemaker:ListTags"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PassExecutionRoleToTrainingJob",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/ts-forecast-demo-sagemaker-role",
+      "Condition": { "StringEquals": { "iam:PassedToService": "sagemaker.amazonaws.com" } }
+    },
+    {
+      "Sid": "S3ProjectAccess",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject"],
+      "Resource": "arn:aws:s3:::ts-forecast-demo-<ACCOUNT_ID>/*"
+    },
+    {
+      "Sid": "S3ProjectListBucket",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::ts-forecast-demo-<ACCOUNT_ID>",
+      "Condition": { "StringLike": { "s3:prefix": ["ts-forecast-demo/*"] } }
+    },
+    {
+      "Sid": "ReadTrainingLogs",
+      "Effect": "Allow",
+      "Action": ["logs:GetLogEvents", "logs:DescribeLogStreams"],
+      "Resource": "arn:aws:logs:*:*:log-group:/aws/sagemaker/*"
+    }
+  ]
+}
