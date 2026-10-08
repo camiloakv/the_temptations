@@ -1,0 +1,43 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+    paths:
+      - "aws/sagemaker/lstm_src/**"
+      - "aws/sagemaker/run_lstm_baseline.py"
+  workflow_dispatch: {}  # manual trigger, e.g. to re-run without a code change
+
+permissions:
+  id-token: write  # required for OIDC -- this is what lets the job request a token, no stored keys
+  contents: read
+
+jobs:
+  launch-lstm-baseline:
+    runs-on: ubuntu-latest
+    environment: production  # optional GitHub Environment -- add a required reviewer here later
+                              # if you want a manual approval gate before training jobs launch
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ts-forecast-demo-github-actions-role
+          aws-region: us-east-1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - run: pip install "sagemaker<3" boto3
+
+      - name: Launch LSTM baseline training job
+        env:
+          BUCKET: ts-forecast-demo-${{ secrets.AWS_ACCOUNT_ID }}
+          ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        run: python aws/sagemaker/run_lstm_baseline.py
+
+  # NOTE: this waits for the full training job (estimator.fit() blocks by default), so the
+  # workflow run stays "in progress" for the job's actual duration, not just launch time. That's
+  # intentional here -- CD should report a real pass/fail, not just "job was submitted".
