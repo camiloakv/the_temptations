@@ -16,8 +16,9 @@ permissions:
 jobs:
   launch-lstm-baseline:
     runs-on: ubuntu-latest
-    environment: production  # optional GitHub Environment -- add a required reviewer here later
-                              # if you want a manual approval gate before training jobs launch
+    # No `environment:` here on purpose. Setting it changes the OIDC token's subject to
+    # "...:environment:<name>", which this role's trust policy doesn't list. If you add an approval
+    # gate later, add that environment subject to github-actions-trust-policy.json at the same time.
     steps:
       - uses: actions/checkout@v4
 
