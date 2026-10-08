@@ -3,8 +3,11 @@ set -euo pipefail
 
 # --- Config ---------------------------------------------------------------
 REGION="us-east-1"
-GITHUB_ORG="<your-github-org-or-username>"
-GITHUB_REPO="<your-repo-name>"
+# Exact repo identity GitHub puts in OIDC tokens, WITHOUT the leading "repo:". Which form applies
+# depends on when the repo was created -- see the lookup steps given alongside this script:
+#   classic:   OWNER/REPO                       (repos created before 2026-07-15, unless opted in)
+#   immutable: OWNER@OWNER_ID/REPO@REPO_ID      (repos created/renamed/transferred after that)
+GITHUB_REPO_SUBJECT="<owner/repo or owner@id/repo@id>"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 BUCKET="ts-forecast-demo-${ACCOUNT_ID}"
 ROLE_NAME="ts-forecast-demo-sagemaker-role"
@@ -173,9 +176,8 @@ else
     --thumbprint-list "6938fd4d98bab03faadb97b34396831e3780aea1"
 fi
 
-sed -e "s/<ACCOUNT_ID>/${ACCOUNT_ID}/g" \
-    -e "s/<GITHUB_ORG>/${GITHUB_ORG}/g" \
-    -e "s/<GITHUB_REPO>/${GITHUB_REPO}/g" \
+sed -e "s|<ACCOUNT_ID>|${ACCOUNT_ID}|g" \
+    -e "s|<GITHUB_REPO_SUBJECT>|${GITHUB_REPO_SUBJECT}|g" \
     github-actions-trust-policy.json > ./github-actions-trust-policy.resolved.json
 
 sed "s/<ACCOUNT_ID>/${ACCOUNT_ID}/g" \
@@ -190,6 +192,12 @@ else
     --description "Assumed by GitHub Actions via OIDC to launch SageMaker training jobs"
 fi
 
+# create-role only applies the trust policy at creation time. Syncing it explicitly means a
+# corrected trust policy actually reaches a role that already exists (same idea as put-role-policy).
+aws iam update-assume-role-policy \
+  --role-name "$CD_ROLE_NAME" \
+  --policy-document file://github-actions-trust-policy.resolved.json
+
 aws iam put-role-policy \
   --role-name "$CD_ROLE_NAME" \
   --policy-name "$CD_POLICY_NAME" \
@@ -200,6 +208,6 @@ CD_ROLE_ARN=$(aws iam get-role --role-name "$CD_ROLE_NAME" --query 'Role.Arn' --
 echo ""
 echo "GitHub Actions role: ${CD_ROLE_ARN}"
 echo "Add AWS_ACCOUNT_ID=${ACCOUNT_ID} as a GitHub repo secret (Settings -> Secrets and variables -> Actions)."
-echo "Trust policy restricts assumption to: ${GITHUB_ORG}/${GITHUB_REPO}, branch main and tags v*.*.*"
+echo "Trust policy restricts assumption to: repo:${GITHUB_REPO_SUBJECT}, branch main and tags v*"
 
 rm -f "$RESOLVED_POLICY" ./github-actions-trust-policy.resolved.json ./github-actions-cd-policy.resolved.json

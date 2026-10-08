@@ -13,8 +13,8 @@
         },
         "StringLike": {
           "token.actions.githubusercontent.com:sub": [
-            "repo:<GITHUB_ORG>/<GITHUB_REPO>:ref:refs/heads/main",
-            "repo:<GITHUB_ORG>/<GITHUB_REPO>:ref:refs/tags/v*"
+            "repo:<GITHUB_REPO_SUBJECT>:ref:refs/heads/main",
+            "repo:<GITHUB_REPO_SUBJECT>:ref:refs/tags/v*"
           ]
         }
       }
