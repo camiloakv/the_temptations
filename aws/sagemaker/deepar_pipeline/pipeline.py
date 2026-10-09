@@ -22,6 +22,7 @@ from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError, WaiterError
+from dotenv import load_dotenv
 from sagemaker.estimator import Estimator
 from sagemaker.image_uris import retrieve
 from sagemaker.inputs import TrainingInput
@@ -41,6 +42,8 @@ from sagemaker.workflow.pipeline import Pipeline
 from sagemaker.workflow.pipeline_context import PipelineSession
 from sagemaker.workflow.properties import PropertyFile
 from sagemaker.workflow.steps import CacheConfig, ProcessingStep, TrainingStep, TransformStep
+
+load_dotenv()
 
 PIPELINE_NAME = "ts-forecast-demo-deepar"
 MODEL_PACKAGE_GROUP = "ts-forecast-demo-deepar"
@@ -83,7 +86,7 @@ TAGS = [
 def load_best_hyperparameters(s3, bucket):
     """Best-HPO hyperparameters persisted by the Stage 2 notebook, minus SageMaker-internal keys."""
     body = s3.get_object(Bucket=bucket, Key=MODEL_CARD_KEY)["Body"].read()
-    best = json.loads(body)["best_hyperparameters"]
+    best = json.loads(body)["jobs"]["best_hpo"]["hyperparameters"]
 
     hyperparameters = {key: str(value) for key, value in best.items() if not key.startswith("_")}
     hyperparameters["time_freq"] = FREQ
