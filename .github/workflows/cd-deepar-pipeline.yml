@@ -1,0 +1,44 @@
+name: CD (DeepAR pipeline)
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+    paths:
+      - "aws/sagemaker/deepar_pipeline/**"
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write  # OIDC: the job requests a short-lived token, no stored AWS keys
+  contents: read
+
+# Never run two upserts/executions of the same pipeline at once.
+concurrency:
+  group: deepar-pipeline
+  cancel-in-progress: false
+
+jobs:
+  run-deepar-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ts-forecast-demo-github-actions-role
+          aws-region: us-east-1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - run: pip install "sagemaker<3" boto3
+
+      # Upserts the definition from the merged code, starts an execution, and waits for the verdict.
+      # Drop --wait to stop burning runner minutes during the ~30 min run (you lose the pass/fail signal).
+      - name: Upsert and run the DeepAR pipeline
+        env:
+          BUCKET: ts-forecast-demo-${{ secrets.AWS_ACCOUNT_ID }}
+          ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        run: python aws/sagemaker/deepar_pipeline/pipeline.py --start --wait
