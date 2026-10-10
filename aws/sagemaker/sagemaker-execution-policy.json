@@ -74,7 +74,10 @@
         "sagemaker:DescribeModel",
         "sagemaker:DeleteEndpoint",
         "sagemaker:DeleteEndpointConfig",
-        "sagemaker:DeleteModel"
+        "sagemaker:DeleteModel",
+        "sagemaker:CreateModelPackage",
+        "sagemaker:DescribeModelPackage",
+        "sagemaker:DescribeModelPackageGroup"
       ],
       "Resource": "*"
     },
