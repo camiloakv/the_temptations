@@ -16,8 +16,7 @@ FORECAST_ERROR = 3.0
 def write_jsonlines(path, records):
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as handle:
-        for record in records:
-            handle.write(json.dumps(record) + "\n")
+        handle.writelines(json.dumps(record) + "\n" for record in records)
 
 
 def make_inputs(root, n_predictions=2):
