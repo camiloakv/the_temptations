@@ -11,8 +11,11 @@ import os
 import sys
 
 import sagemaker
+from dotenv import load_dotenv
 from sagemaker.inputs import TrainingInput
 from sagemaker.pytorch import PyTorch
+
+load_dotenv()
 
 BUCKET = os.environ["BUCKET"]
 SAGEMAKER_ROLE = f"arn:aws:iam::{os.environ['ACCOUNT_ID']}:role/ts-forecast-demo-sagemaker-role"
