@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.10"
       - run: pip install ruff
-      - run: ruff check aws/sagemaker/lstm_src/ aws/sagemaker/tft_src/ tests/aws/sagemaker/
+      - run: ruff check aws/sagemaker/lstm_src/ aws/sagemaker/tft_src/ aws/sagemaker/deepar_pipeline/ tests/aws/sagemaker/
 
   smoke-test-lstm:
     runs-on: ubuntu-latest
@@ -37,6 +37,17 @@ jobs:
       - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
       - run: pip install pandas numpy boto3 pytest
       - run: pytest tests/aws/sagemaker/test_lstm_smoke.py -v
+
+  test-deepar-pipeline-steps:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install numpy pandas pyarrow duckdb pytest
+      - run: pytest tests/aws/sagemaker/deepar_pipeline -v
 
   # NOTE: no TFT smoke test yet. pytorch-forecasting + lightning add real install time to every
   # PR; deliberately deferred rather than slowing down every CI run for the stretch model. Revisit

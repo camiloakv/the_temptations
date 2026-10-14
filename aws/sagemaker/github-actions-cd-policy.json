@@ -34,6 +34,26 @@
       "Condition": { "StringLike": { "s3:prefix": ["ts-forecast-demo/*"] } }
     },
     {
+      "Sid": "ManageDeepArPipeline",
+      "Effect": "Allow",
+      "Action": [
+        "sagemaker:CreatePipeline",
+        "sagemaker:UpdatePipeline",
+        "sagemaker:DescribePipeline",
+        "sagemaker:StartPipelineExecution",
+        "sagemaker:StopPipelineExecution",
+        "sagemaker:DescribePipelineExecution",
+        "sagemaker:ListPipelineExecutionSteps"
+      ],
+      "Resource": "arn:aws:sagemaker:*:<ACCOUNT_ID>:pipeline/ts-forecast-demo-*"
+    },
+    {
+      "Sid": "ManageModelPackageGroup",
+      "Effect": "Allow",
+      "Action": ["sagemaker:CreateModelPackageGroup", "sagemaker:DescribeModelPackageGroup"],
+      "Resource": "arn:aws:sagemaker:*:<ACCOUNT_ID>:model-package-group/ts-forecast-demo-*"
+    },
+    {
       "Sid": "ReadTrainingLogs",
       "Effect": "Allow",
       "Action": ["logs:GetLogEvents", "logs:DescribeLogStreams"],

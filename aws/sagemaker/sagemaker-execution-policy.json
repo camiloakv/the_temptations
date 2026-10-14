@@ -12,7 +12,7 @@
       "Effect": "Allow",
       "Action": "s3:ListBucket",
       "Resource": "arn:aws:s3:::ts-forecast-demo-<ACCOUNT_ID>",
-      "Condition": { "StringLike": { "s3:prefix": ["ts-forecast-demo/*"] } }
+      "Condition": { "StringLike": { "s3:prefix": ["ts-forecast-demo/*", "ts-forecast-demo-*"] } }
     },
     {
       "Sid": "ECRPullTrainingImages",
@@ -74,9 +74,18 @@
         "sagemaker:DescribeModel",
         "sagemaker:DeleteEndpoint",
         "sagemaker:DeleteEndpointConfig",
-        "sagemaker:DeleteModel"
+        "sagemaker:DeleteModel",
+        "sagemaker:CreateModelPackage",
+        "sagemaker:DescribeModelPackage",
+        "sagemaker:DescribeModelPackageGroup"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "RegisterModelsInProjectGroup",
+      "Effect": "Allow",
+      "Action": "sagemaker:CreateModelPackageGroup",
+      "Resource": "arn:aws:sagemaker:*:<ACCOUNT_ID>:model-package-group/ts-forecast-demo-*"
     },
     {
       "Sid": "InvokeOwnEndpoints",
